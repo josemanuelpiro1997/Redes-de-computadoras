@@ -1,5 +1,5 @@
-# Install utils 
-apt install bridge-utils radvd
+#!/bin/bash
+
 
 # Create config files
 tee -a /etc/radvd.conf <<EOF
@@ -55,13 +55,29 @@ brctl addif sw1 veth1
 brctl addif sw1 veth2
 brctl addif sw1 veth-router
 
-# Configure router as router
+# Configure router as router ofr IPv6 and IPv4
 ip netns exec r1 sysctl -w net.ipv6.conf.all.forwarding=1
+ip netns exec r1 sysctl -w net.ipv4.ip_forward=1
+
+# Configure IPv4 and IPv6 addresses to router
+# to switch
+ip netns exec r1 ip -6 addr add 2001:aaaa:bbbb:1::11/64 dev vpeer-router
+ip netns exec r1 ip addr add 192.168.1.11/24 dev vpeer-router
+# to h3 
+ip netns exec r1 ip -6 addr add 2001:aaaa:cccc:1::12/64 dev veth3
+ip netns exec r1 ip addr add 192.168.2.12/24 dev vpeer-router
 
 
-# Configure IP addresses
-ip netns exec r1 ip -6 addr add 2001::113/64 dev vpeer-router
-ip netns exec r1 ip -6 addr add 2002::111/64 dev veth3
+# Configure IP addresses to housts
+# h1
+ip netns exec h1 ip addr add 192.168.1.10/24 dev vpeer1
+ip netns exec h1 ip -6 addr add 2001:aaaa:bbbb:1::10/64 dev vpeer1
+# h2
+ip netns exec h2 ip addr add 192.168.2.10/24 dev vpeer2
+ip netns exec h2 ip -6 addr add 2001:aaaa:cccc:1::10/64 dev vpeer2
+# h3
+ip netns exec h3 ip addr add 192.168.2.11/24 dev vpeer3
+ip netns exec h3 ip -6 addr add 2001:aaaa:cccc:1::11/64 dev vpeer3
 
 # Set Up interfaces
 ip netns exec h1 ip link set lo up
@@ -77,17 +93,3 @@ ip netns exec r1 ip link set vpeer-router up
 
 # Init router advertisement daemon
 ip netns exec r1 radvd -n
-
-
-#Clear environment 
-ip netns delete h1 
-ip netns delete h2 
-ip netns delete h3
-ip netns delete r1
-ip link delete veth-router
-ip link delete veth1
-ip link delete veth2
-ip link delete veth3
-ip link set sw1 down
-brctl delbr sw1
-rm /etc/radvd.conf
